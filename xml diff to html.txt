@@ -1,0 +1,34 @@
+from xml.dom import minidom
+
+# Parse the first XML file
+doc1 = minidom.parse("file1.xml")
+
+# Parse the second XML file
+doc2 = minidom.parse("file2.xml")
+
+# Compare the two XML documents
+diff = doc1.compareDocumentPosition(doc2)
+
+# Format the diff as an HTML table
+html = "<table>"
+if diff & doc1.DOCUMENT_POSITION_DISCONNECTED:
+    # The documents are not related
+    html += "<tr><td>The documents are not related</td></tr>"
+if diff & doc1.DOCUMENT_POSITION_PRECEDING:
+    # doc1 comes before doc2
+    html += "<tr><td>doc1 comes before doc2</td></tr>"
+if diff & doc1.DOCUMENT_POSITION_FOLLOWING:
+    # doc1 comes after doc2
+    html += "<tr><td>doc1 comes after doc2</td></tr>"
+if diff & doc1.DOCUMENT_POSITION_CONTAINS:
+    # doc1 contains doc2
+    html += "<tr><td>doc1 contains doc2</td></tr>"
+if diff & doc1.DOCUMENT_POSITION_CONTAINED_BY:
+    # doc1 is contained by doc2
+    html += "<tr><td>doc1 is contained by doc2</td></tr>"
+if diff & doc1.DOCUMENT_POSITION_IMPLEMENTATION_SPECIFIC:
+    # The documents are related in an implementation-specific way
+    html += "<tr><td>The documents are related in an implementation-specific way</td></tr>"
+html += "</table>"
+
+# Save the diff to an HTML file
