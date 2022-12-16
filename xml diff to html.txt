@@ -32,3 +32,48 @@ if diff & doc1.DOCUMENT_POSITION_IMPLEMENTATION_SPECIFIC:
 html += "</table>"
 
 # Save the diff to an HTML file
+
+
+
+
+
+
+
+
+import difflib
+from xml.dom import minidom
+
+# Read the contents of the first XML file
+with open("file1.xml") as f:
+    xml1 = f.read()
+
+# Parse the first XML file using parseString
+doc1 = minidom.parseString(xml1)
+
+# Convert the first XML document to a string
+xml1 = doc1.toxml()
+
+# Read the contents of the second XML file
+with open("file2.xml") as f:
+    xml2 = f.read()
+
+# Parse the second XML file using parseString
+doc2 = minidom.parseString(xml2)
+
+# Convert the second XML document to a string
+xml2 = doc2.toxml()
+
+# Create a diff
+diff = difflib.unified_diff(xml1.splitlines(), xml2.splitlines())
+
+# Format the diff as an HTML table
+html = "<table>"
+for line in diff:
+    # Add a row for each line in the diff
+    html += "<tr><td>" + line + "</td></tr>"
+html += "</table>"
+
+# Save the diff to an HTML file
+with open("diff.html", "w") as f:
+    f.write(html)
+
