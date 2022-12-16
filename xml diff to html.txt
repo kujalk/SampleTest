@@ -77,3 +77,16 @@ html += "</table>"
 with open("diff.html", "w") as f:
     f.write(html)
 
+import difflib
+import lxml.etree as etree
+
+# Parse the XML files
+tree1 = etree.parse("file1.xml")
+tree2 = etree.parse("file2.xml")
+
+# Compare the XML trees
+diff = difflib.HtmlDiff().make_file(tree1.getroot(), tree2.getroot())
+
+# Save the HTML report to a file
+with open("diff.html", "w") as f:
+    f.write(diff)
