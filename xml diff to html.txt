@@ -68,6 +68,87 @@ diff = difflib.unified_diff(xml1.splitlines(), xml2.splitlines())
 
 # Format the diff as an HTML table
 html = "<table>"
+
+
+
+
+
+
+
+
+
+
+
+import dash
+import dash_cytoscape as cyto
+import dash_html_components as html
+
+app = dash.Dash(__name__)
+
+elements = [
+    {'data': {'id': 'A'}},
+    {'data': {'id': 'B'}},
+    {'data': {'id': 'C'}},
+    {'data': {'id': 'D'}},
+    {'data': {'id': 'E'}},
+    {'data': {'id': 'AB', 'source': 'A', 'target': 'B'}},
+    {'data': {'id': 'BC', 'source': 'B', 'target': 'C'}},
+    {'data': {'id': 'CD', 'source': 'C', 'target': 'D'}},
+    {'data': {'id': 'DE', 'source': 'D', 'target': 'E'}},
+    {'data': {'id': 'AC', 'source': 'A', 'target': 'C'}},
+    {'data': {'id': 'CE', 'source': 'C', 'target': 'E'}}
+]
+
+styles = [
+    {
+        'selector': 'edge',
+        'style': {
+            'width': 2,
+            'line-color': '#ccc'
+        }
+    }
+]
+
+app.layout = html.Div([
+    cyto.Cytoscape(
+        id='cytoscape',
+        elements=elements,
+        style={'height': '500px'},
+        stylesheet=styles,
+        layout={'name': 'breadthfirst'}
+    )
+])
+
+@app.callback(
+    dash.dependencies.Output('cytoscape', 'highlight'),
+    dash.dependencies.Input('cytoscape', 'tapNodeData'),
+    dash.dependencies.State('cytoscape', 'elements')
+)
+def highlight_path(node, elements):
+    if node is None:
+        return None
+    
+    source_id = node['id']
+    target_id = 'E'
+    
+    # Use breadthfirst layout to get the shortest path between the source and target nodes
+    shortest_path = cyto.bfs(source_id, target_id, elements)
+    
+    # Highlight the nodes and edges along the shortest path
+    highlighted = {
+        node['id']: {'background-color': '#0074D9', 'border-color': '#0074D9', 'border-width': '2px'}
+        for node in shortest_path
+    }
+    highlighted.update({
+        edge['data']['id']: {'line-color': '#0074D9', 'line-width': '3px'}
+        for edge in shortest_path[1:]
+    })
+    
+    return highlighted
+
+if __name__ == '__main__':
+    app.run_server(debug=True)
+
 for line in diff:
     # Add a row for each line in the diff
     html += "<tr><td>" + line + "</td></tr>"
