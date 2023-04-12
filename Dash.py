@@ -21,6 +21,7 @@ elements = [
 ]
 
 # Define the styles for the nodes and edges
+# Define the styles for the nodes and edges
 styles = [
     {
         'selector': 'node',
@@ -40,7 +41,22 @@ styles = [
             'line-color': '#ccc'
         }
     },
+    {
+        'selector': 'node:selected',
+        'style': {
+            'border-color': 'purple',
+            'border-width': '3px'
+        }
+    },
+    {
+        'selector': 'edge:selected',
+        'style': {
+            'line-color': 'purple',
+            'width': 3
+        }
+    }
 ]
+
 
 # Define the layout of the graph
 layout = {'name': 'cose'}
@@ -63,6 +79,8 @@ app.layout = html.Div([
 ])
 
 # Define a callback that highlights the shortest path between two nodes
+
+
 @app.callback(
     Output('cytoscape', 'stylesheet'),
     Input('cytoscape', 'selectedNodeData'),
