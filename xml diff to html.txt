@@ -1,90 +1,11 @@
-from xml.dom import minidom
-
-# Parse the first XML file
-doc1 = minidom.parse("file1.xml")
-
-# Parse the second XML file
-doc2 = minidom.parse("file2.xml")
-
-# Compare the two XML documents
-diff = doc1.compareDocumentPosition(doc2)
-
-# Format the diff as an HTML table
-html = "<table>"
-if diff & doc1.DOCUMENT_POSITION_DISCONNECTED:
-    # The documents are not related
-    html += "<tr><td>The documents are not related</td></tr>"
-if diff & doc1.DOCUMENT_POSITION_PRECEDING:
-    # doc1 comes before doc2
-    html += "<tr><td>doc1 comes before doc2</td></tr>"
-if diff & doc1.DOCUMENT_POSITION_FOLLOWING:
-    # doc1 comes after doc2
-    html += "<tr><td>doc1 comes after doc2</td></tr>"
-if diff & doc1.DOCUMENT_POSITION_CONTAINS:
-    # doc1 contains doc2
-    html += "<tr><td>doc1 contains doc2</td></tr>"
-if diff & doc1.DOCUMENT_POSITION_CONTAINED_BY:
-    # doc1 is contained by doc2
-    html += "<tr><td>doc1 is contained by doc2</td></tr>"
-if diff & doc1.DOCUMENT_POSITION_IMPLEMENTATION_SPECIFIC:
-    # The documents are related in an implementation-specific way
-    html += "<tr><td>The documents are related in an implementation-specific way</td></tr>"
-html += "</table>"
-
-# Save the diff to an HTML file
-
-
-
-
-
-
-
-
-import difflib
-from xml.dom import minidom
-
-# Read the contents of the first XML file
-with open("file1.xml") as f:
-    xml1 = f.read()
-
-# Parse the first XML file using parseString
-doc1 = minidom.parseString(xml1)
-
-# Convert the first XML document to a string
-xml1 = doc1.toxml()
-
-# Read the contents of the second XML file
-with open("file2.xml") as f:
-    xml2 = f.read()
-
-# Parse the second XML file using parseString
-doc2 = minidom.parseString(xml2)
-
-# Convert the second XML document to a string
-xml2 = doc2.toxml()
-
-# Create a diff
-diff = difflib.unified_diff(xml1.splitlines(), xml2.splitlines())
-
-# Format the diff as an HTML table
-html = "<table>"
-
-
-
-
-
-
-
-
-
-
-
 import dash
 import dash_cytoscape as cyto
 import dash_html_components as html
+import networkx as nx
 
 app = dash.Dash(__name__)
 
+# Define the nodes and edges of the graph
 elements = [
     {'data': {'id': 'A'}},
     {'data': {'id': 'B'}},
@@ -99,28 +20,51 @@ elements = [
     {'data': {'id': 'CE', 'source': 'C', 'target': 'E'}}
 ]
 
+# Define the styles for the nodes and edges
 styles = [
+    {
+        'selector': 'node',
+        'style': {
+            'label': 'data(id)',
+            'background-color': '#ddd',
+            'border-color': '#555',
+            'border-width': '1px',
+            'width': '50px',
+            'height': '50px'
+        }
+    },
     {
         'selector': 'edge',
         'style': {
             'width': 2,
             'line-color': '#ccc'
         }
-    }
+    },
 ]
 
+# Define the layout of the graph
+layout = {'name': 'breadthfirst'}
+
+# Create a NetworkX graph from the elements
+G = nx.DiGraph()
+for element in elements:
+    if 'source' in element['data'] and 'target' in element['data']:
+        G.add_edge(element['data']['source'], element['data']['target'])
+
+# Define the app layout
 app.layout = html.Div([
     cyto.Cytoscape(
         id='cytoscape',
         elements=elements,
         style={'height': '500px'},
         stylesheet=styles,
-        layout={'name': 'breadthfirst'}
+        layout=layout
     )
 ])
 
+# Define a callback that highlights the shortest path between two nodes
 @app.callback(
-    dash.dependencies.Output('cytoscape', 'highlight'),
+    dash.dependencies.Output('cytoscape', 'style'),
     dash.dependencies.Input('cytoscape', 'tapNodeData'),
     dash.dependencies.State('cytoscape', 'elements')
 )
@@ -131,43 +75,19 @@ def highlight_path(node, elements):
     source_id = node['id']
     target_id = 'E'
     
-    # Use breadthfirst layout to get the shortest path between the source and target nodes
-    shortest_path = cyto.bfs(source_id, target_id, elements)
+    # Use NetworkX to compute the shortest path
+    shortest_path = nx.shortest_path(G, source_id, target_id)
     
-    # Highlight the nodes and edges along the shortest path
-    highlighted = {
-        node['id']: {'background-color': '#0074D9', 'border-color': '#0074D9', 'border-width': '2px'}
-        for node in shortest_path
+    # Create a dictionary that maps the node and edge IDs along the shortest path to their respective style objects
+    style = {
+        node_id: {'background-color': '#0074D9', 'border-color': '#0074D9', 'border-width': '2px'}
+        for node_id in shortest_path
     }
-    highlighted.update({
-        edge['data']['id']: {'line-color': '#0074D9', 'line-width': '3px'}
-        for edge in shortest_path[1:]
-    })
-    
-    return highlighted
+    style.update({
+        edge_id: {'line-color': '#0074D9', 'line-width': '3px'}
+       
+    for i, node_id in enumerate(shortest_path[1:], 1)
+    for edge_id in nx.edges(G, shortest_path[i-1], node_id)
+})
 
-if __name__ == '__main__':
-    app.run_server(debug=True)
-
-for line in diff:
-    # Add a row for each line in the diff
-    html += "<tr><td>" + line + "</td></tr>"
-html += "</table>"
-
-# Save the diff to an HTML file
-with open("diff.html", "w") as f:
-    f.write(html)
-
-import difflib
-import lxml.etree as etree
-
-# Parse the XML files
-tree1 = etree.parse("file1.xml")
-tree2 = etree.parse("file2.xml")
-
-# Compare the XML trees
-diff = difflib.HtmlDiff().make_file(tree1.getroot(), tree2.getroot())
-
-# Save the HTML report to a file
-with open("diff.html", "w") as f:
-    f.write(diff)
+    return [{'selector': f'#{element["data"]["id"]}', 'style': style.get(element['data']['id'], {})} for element in elements]
