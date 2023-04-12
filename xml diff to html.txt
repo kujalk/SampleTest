@@ -84,10 +84,9 @@ def highlight_path(node, elements):
         for node_id in shortest_path
     }
     style.update({
-        edge_id: {'line-color': '#0074D9', 'line-width': '3px'}
-       
-    for i, node_id in enumerate(shortest_path[1:], 1)
-    for edge_id in nx.edges(G, shortest_path[i-1], node_id)
-})
-
+        edge: {'line-color': '#0074D9', 'line-width': '3px'}
+        for i in range(len(shortest_path)-1)
+        for edge in [(shortest_path[i], shortest_path[i+1])]
+    })
+    
     return [{'selector': f'#{element["data"]["id"]}', 'style': style.get(element['data']['id'], {})} for element in elements]
