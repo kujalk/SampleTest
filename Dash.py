@@ -78,9 +78,6 @@ app.layout = html.Div([
     )
 ])
 
-# Define a callback that highlights the shortest path between two nodes
-
-
 @app.callback(
     Output('cytoscape', 'stylesheet'),
     Input('cytoscape', 'selectedNodeData'),
@@ -116,7 +113,15 @@ def highlight_path(node, elements):
         source_node = shortest_path[i]
         target_node = shortest_path[i+1]
         edge_id = f'{source_node}{target_node}'
-        edge_style[edge_id] = {'line-color': 'red'}
+        edge = [e for e in elements if e['data'].get('id') == edge_id]
+        if edge:
+            edge = edge[0]
+            edge_style[edge_id] = {
+                'line-color': edge['data'].get('line-color', 'red'),
+                'width': edge['data'].get('width', 2)
+            }
+        else:
+            edge_style[edge_id] = {'line-color': 'red'}
 
     # Update the style dictionary with the edge styles
     style.update(edge_style)
@@ -130,6 +135,7 @@ def highlight_path(node, elements):
     styles_copy.extend(style_dict)
 
     return styles_copy
+
 
 
 if __name__ == '__main__':
