@@ -1,0 +1,68 @@
+---
+- name: Install and configure HAProxy with custom config
+  hosts: your_server_group
+  become: yes
+  tasks:
+    - name: Install HAProxy
+      yum:
+        name: haproxy
+        state: present
+
+    - name: Create HAProxy configuration directory
+      file:
+        path: /local/haconfig
+        state: directory
+        mode: '0755'
+
+    - name: Create custom HAProxy configuration file
+      copy:
+        dest: /local/haconfig/ha.cfg
+        content: |
+          global
+              log /dev/log    local0
+              log /dev/log    local1 notice
+              chroot /var/lib/haproxy
+              stats socket /run/haproxy/admin.sock mode 660 level admin
+              stats timeout 30s
+              user haproxy
+              group haproxy
+              daemon
+
+          defaults
+              log     global
+              mode    http
+              option  httplog
+              option  dontlognull
+              timeout connect 5000
+              timeout client  50000
+              timeout server  50000
+        mode: '0644'
+
+    - name: Create systemd override directory for HAProxy
+      file:
+        path: /etc/systemd/system/haproxy.service.d
+        state: directory
+        mode: '0755'
+
+    - name: Create systemd override file for HAProxy
+      copy:
+        dest: /etc/systemd/system/haproxy.service.d/override.conf
+        content: |
+          [Service]
+          ExecStart=
+          ExecStart=/usr/sbin/haproxy -f /local/haconfig/ha.cfg
+        mode: '0644'
+
+    - name: Reload systemd
+      command: systemctl daemon-reload
+
+    - name: Start HAProxy service
+      systemd:
+        name: haproxy
+        state: started
+        enabled: yes
+
+    - name: Check HAProxy service status
+      systemd:
+        name: haproxy
+        state: started
