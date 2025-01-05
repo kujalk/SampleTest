@@ -1,118 +1,144 @@
 package main
 
 import (
-	"bufio"
-	"fmt"
-	"os"
-	"strings"
+    "bufio"
+    "fmt"
+    "os"
+    "strings"
+    "time"
 
-	"github.com/pvik/go-splunk-rest"
-	"github.com/spf13/cobra"
-	"golang.org/x/term"
+    "github.com/pvik/go-splunk-rest"
+    "github.com/spf13/cobra"
+    "golang.org/x/term"
 )
 
 func main() {
-	var username, password string
-	var splunkClient *splunk.Client
+    var username, password string
+    var splunkConn splunk.Connection
 
-	authenticate := func() {
-		fmt.Print("Enter Splunk username: ")
-		reader := bufio.NewReader(os.Stdin)
-		username, _ = reader.ReadString('\n')
-		username = strings.TrimSpace(username)
+    authenticate := func() {
+        fmt.Print("Enter Splunk username: ")
+        reader := bufio.NewReader(os.Stdin)
+        username, _ = reader.ReadString('\n')
+        username = strings.TrimSpace(username)
 
-		fmt.Print("Enter Splunk password: ")
-		bytePassword, _ := term.ReadPassword(int(os.Stdin.Fd()))
-		fmt.Println()
-		password = strings.TrimSpace(string(bytePassword))
+        fmt.Print("Enter Splunk password: ")
+        bytePassword, _ := term.ReadPassword(int(os.Stdin.Fd()))
+        fmt.Println()
+        password = strings.TrimSpace(string(bytePassword))
 
-		// Create Splunk client session
-		var err error
-		splunkClient, err = splunk.NewClient(username, password, "https://splunk-server:8089")
-		if err != nil {
-			fmt.Printf("Failed to create Splunk client: %v\n", err)
-			os.Exit(1)
-		}
-		fmt.Println("Successfully authenticated to Splunk!")
-	}
+        // Create Splunk connection session
+        splunkConn = splunk.Connection{
+            Host:     "https://splunk-server:8089",
+            AuthType: "basic",
+            Username: username,
+            Password: password,
+        }
 
-	rootCmd := &cobra.Command{
-		Use:   "splunk-cli",
-		Short: "CLI to interact with Splunk using go-splunk-rest",
-		Run: func(cmd *cobra.Command, args []string) {
-			fmt.Println("Welcome to Splunk CLI. Type 'help' to see available commands or 'exit' to quit.")
-			authenticate()
+        fmt.Println("Successfully authenticated to Splunk!")
+    }
 
-			for {
-				fmt.Print("splunk-cli> ")
-				reader := bufio.NewReader(os.Stdin)
-				input, _ := reader.ReadString('\n')
-				input = strings.TrimSpace(input)
+    rootCmd := &cobra.Command{
+        Use:   "splunk-cli",
+        Short: "CLI to interact with Splunk using go-splunk-rest",
+        Run: func(cmd *cobra.Command, args []string) {
+            fmt.Println("Welcome to Splunk CLI. Type 'help' to see available commands or 'exit' to quit.")
+            authenticate()
 
-				if input == "exit" {
-					fmt.Println("Exiting Splunk CLI. Goodbye!")
-					break
-				}
+            for {
+                fmt.Print("splunk-cli> ")
+                reader := bufio.NewReader(os.Stdin)
+                input, _ := reader.ReadString('\n')
+                input = strings.TrimSpace(input)
 
-				args := strings.Split(input, " ")
-				if err := rootCmd.ExecuteContext(cmd.Context(), args...); err != nil {
-					fmt.Printf("Error: %v\n", err)
-				}
-			}
-		},
-	}
+                if input == "exit" {
+                    fmt.Println("Exiting Splunk CLI. Goodbye!")
+                    break
+                }
 
-	// Command to query users
-	queryUserCmd := &cobra.Command{
-		Use:   "query-user",
-		Short: "Query user data",
-		Run: func(cmd *cobra.Command, args []string) {
-			response, err := splunkClient.Query("search index=_internal sourcetype=user_data | stats count by user")
-			if err != nil {
-				fmt.Printf("Error querying users: %v\n", err)
-				return
-			}
-			fmt.Println("User Query Results:")
-			fmt.Println(response)
-		},
-	}
-	rootCmd.AddCommand(queryUserCmd)
+                args := strings.Split(input, " ")
+                if err := rootCmd.ExecuteContext(cmd.Context(), args...); err != nil {
+                    fmt.Printf("Error: %v\n", err)
+                }
+            }
+        },
+    }
 
-	// Command to query groups
-	queryGroupCmd := &cobra.Command{
-		Use:   "query-group",
-		Short: "Query group data",
-		Run: func(cmd *cobra.Command, args []string) {
-			response, err := splunkClient.Query("search index=_internal sourcetype=group_data | stats count by group")
-			if err != nil {
-				fmt.Printf("Error querying groups: %v\n", err)
-				return
-			}
-			fmt.Println("Group Query Results:")
-			fmt.Println(response)
-		},
-	}
-	rootCmd.AddCommand(queryGroupCmd)
+    // Command to query users
+    queryUserCmd := &cobra.Command{
+        Use:   "query-user",
+        Short: "Query user data",
+        Run: func(cmd *cobra.Command, args []string) {
+            searchOptions := splunk.SearchOptions{
+                MaxCount:        100,
+                UseEarliestTime: true,
+                EarliestTime:    time.Now().Add(-30 * 24 * time.Hour),
+                UseLatestTime:   true,
+                LatestTime:      time.Now(),
+            }
 
-	// Command to query failures
-	queryFailuresCmd := &cobra.Command{
-		Use:   "query-failures",
-		Short: "Query failure data",
-		Run: func(cmd *cobra.Command, args []string) {
-			response, err := splunkClient.Query("search index=_internal sourcetype=error_logs | stats count by error")
-			if err != nil {
-				fmt.Printf("Error querying failures: %v\n", err)
-				return
-			}
-			fmt.Println("Failure Query Results:")
-			fmt.Println(response)
-		},
-	}
-	rootCmd.AddCommand(queryFailuresCmd)
+            recs, err := splunkConn.Search("search index=_internal sourcetype=user_data | stats count by user", searchOptions)
+            if err != nil {
+                fmt.Printf("Error querying users: %v\n", err)
+                return
+            }
+            fmt.Println("User Query Results:")
+            fmt.Println(recs)
+        },
+    }
+    rootCmd.AddCommand(queryUserCmd)
 
-	// Run the CLI loop
-	if err := rootCmd.Execute(); err != nil {
-		fmt.Println(err)
-		os.Exit(1)
-	}
+    // Command to query groups
+    queryGroupCmd := &cobra.Command{
+        Use:   "query-group",
+        Short: "Query group data",
+        Run: func(cmd *cobra.Command, args []string) {
+            searchOptions := splunk.SearchOptions{
+                MaxCount:        100,
+                UseEarliestTime: true,
+                EarliestTime:    time.Now().Add(-30 * 24 * time.Hour),
+                UseLatestTime:   true,
+                LatestTime:      time.Now(),
+            }
+
+            recs, err := splunkConn.Search("search index=_internal sourcetype=group_data | stats count by group", searchOptions)
+            if err != nil {
+                fmt.Printf("Error querying groups: %v\n", err)
+                return
+            }
+            fmt.Println("Group Query Results:")
+            fmt.Println(recs)
+        },
+    }
+    rootCmd.AddCommand(queryGroupCmd)
+
+    // Command to query failures
+    queryFailuresCmd := &cobra.Command{
+        Use:   "query-failures",
+        Short: "Query failure data",
+        Run: func(cmd *cobra.Command, args []string) {
+            searchOptions := splunk.SearchOptions{
+                MaxCount:        100,
+                UseEarliestTime: true,
+                EarliestTime:    time.Now().Add(-30 * 24 * time.Hour),
+                UseLatestTime:   true,
+                LatestTime:      time.Now(),
+            }
+
+            recs, err := splunkConn.Search("search index=_internal sourcetype=error_logs | stats count by error", searchOptions)
+            if err != nil {
+                fmt.Printf("Error querying failures: %v\n", err)
+                return
+            }
+            fmt.Println("Failure Query Results:")
+            fmt.Println(recs)
+        },
+    }
+    rootCmd.AddCommand(queryFailuresCmd)
+
+    // Run the CLI loop
+    if err := rootCmd.Execute(); err != nil {
+        fmt.Println(err)
+        os.Exit(1)
+    }
 }
