@@ -13,30 +13,28 @@ import (
 )
 
 func main() {
-    var username, password string
     var splunkConn splunk.Connection
 
-    authenticate := func() {
-        fmt.Print("Enter Splunk username: ")
-        reader := bufio.NewReader(os.Stdin)
-        username, _ = reader.ReadString('\n')
-        username = strings.TrimSpace(username)
+    // Authenticate immediately when program starts
+    fmt.Print("Enter Splunk username: ")
+    reader := bufio.NewReader(os.Stdin)
+    username, _ := reader.ReadString('\n')
+    username = strings.TrimSpace(username)
 
-        fmt.Print("Enter Splunk password: ")
-        bytePassword, _ := term.ReadPassword(int(os.Stdin.Fd()))
-        fmt.Println()
-        password = strings.TrimSpace(string(bytePassword))
+    fmt.Print("Enter Splunk password: ")
+    bytePassword, _ := term.ReadPassword(int(os.Stdin.Fd()))
+    fmt.Println()
+    password := strings.TrimSpace(string(bytePassword))
 
-        // Create Splunk connection session
-        splunkConn = splunk.Connection{
-            Host:     "https://splunk-server:8089",
-            AuthType: "basic",
-            Username: username,
-            Password: password,
-        }
-
-        fmt.Println("Successfully authenticated to Splunk!")
+    // Create Splunk connection session
+    splunkConn = splunk.Connection{
+        Host:     "https://splunk-server:8089",
+        AuthType: "basic",
+        Username: username,
+        Password: password,
     }
+
+    fmt.Println("Successfully authenticated to Splunk!")
 
     rootCmd := &cobra.Command{
         Use:   "splunk-cli",
@@ -115,15 +113,9 @@ func main() {
     }
     rootCmd.AddCommand(queryFailuresCmd)
 
-    rootCmd.PersistentPreRun = func(cmd *cobra.Command, args []string) {
-        if splunkConn.Host == "" {
-            authenticate()
-        }
-    }
-
+    // Main command loop
     for {
         fmt.Print("splunk-cli> ")
-        reader := bufio.NewReader(os.Stdin)
         input, _ := reader.ReadString('\n')
         input = strings.TrimSpace(input)
 
@@ -133,7 +125,8 @@ func main() {
         }
 
         args := strings.Split(input, " ")
-        if err := rootCmd.ExecuteContext(rootCmd.Context(), args...); err != nil {
+        rootCmd.SetArgs(args)
+        if err := rootCmd.Execute(); err != nil {
             fmt.Printf("Error: %v\n", err)
         }
     }
