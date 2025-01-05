@@ -2,7 +2,9 @@ package main
 
 import (
     "bufio"
+    "crypto/tls"
     "fmt"
+    "net/http"
     "os"
     "strings"
     "time"
@@ -26,12 +28,19 @@ func main() {
     fmt.Println()
     password := strings.TrimSpace(string(bytePassword))
 
+    // Create custom HTTP client with TLS skip verify
+    tr := &http.Transport{
+        TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+    }
+    httpClient := &http.Client{Transport: tr}
+
     // Create Splunk connection session
     splunkConn = splunk.Connection{
-        Host:     "https://splunk-server:8089",
-        AuthType: "basic",
-        Username: username,
-        Password: password,
+        Host:       "https://splunk-server:8089",
+        AuthType:   "basic",
+        Username:   username,
+        Password:   password,
+        HTTPClient: httpClient,
     }
 
     fmt.Println("Successfully authenticated to Splunk!")
