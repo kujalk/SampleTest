@@ -2,14 +2,12 @@ package main
 
 import (
     "bufio"
-    "crypto/tls"
     "fmt"
-    "net/http"
     "os"
     "strings"
     "time"
 
-    "github.com/pvik/go-splunk-rest"
+    splunk "github.com/pvik/go-splunk-rest"
     "github.com/spf13/cobra"
     "golang.org/x/term"
 )
@@ -28,19 +26,12 @@ func main() {
     fmt.Println()
     password := strings.TrimSpace(string(bytePassword))
 
-    // Create custom HTTP client with TLS skip verify
-    tr := &http.Transport{
-        TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
-    }
-    httpClient := &http.Client{Transport: tr}
-
     // Create Splunk connection session
     splunkConn = splunk.Connection{
-        Host:       "https://splunk-server:8089",
-        AuthType:   "basic",
-        Username:   username,
-        Password:   password,
-        HTTPClient: httpClient,
+        Host:     "https://splunk-server:8089",
+        AuthType: "basic",
+        Username: username,
+        Password: password,
     }
 
     fmt.Println("Successfully authenticated to Splunk!")
