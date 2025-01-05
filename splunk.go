@@ -41,27 +41,6 @@ func main() {
     rootCmd := &cobra.Command{
         Use:   "splunk-cli",
         Short: "CLI to interact with Splunk using go-splunk-rest",
-        Run: func(cmd *cobra.Command, args []string) {
-            fmt.Println("Welcome to Splunk CLI. Type 'help' to see available commands or 'exit' to quit.")
-            authenticate()
-
-            for {
-                fmt.Print("splunk-cli> ")
-                reader := bufio.NewReader(os.Stdin)
-                input, _ := reader.ReadString('\n')
-                input = strings.TrimSpace(input)
-
-                if input == "exit" {
-                    fmt.Println("Exiting Splunk CLI. Goodbye!")
-                    break
-                }
-
-                args := strings.Split(input, " ")
-                if err := rootCmd.ExecuteContext(cmd.Context(), args...); err != nil {
-                    fmt.Printf("Error: %v\n", err)
-                }
-            }
-        },
     }
 
     // Command to query users
@@ -136,9 +115,26 @@ func main() {
     }
     rootCmd.AddCommand(queryFailuresCmd)
 
-    // Run the CLI loop
-    if err := rootCmd.Execute(); err != nil {
-        fmt.Println(err)
-        os.Exit(1)
+    rootCmd.PersistentPreRun = func(cmd *cobra.Command, args []string) {
+        if splunkConn.Host == "" {
+            authenticate()
+        }
+    }
+
+    for {
+        fmt.Print("splunk-cli> ")
+        reader := bufio.NewReader(os.Stdin)
+        input, _ := reader.ReadString('\n')
+        input = strings.TrimSpace(input)
+
+        if input == "exit" {
+            fmt.Println("Exiting Splunk CLI. Goodbye!")
+            break
+        }
+
+        args := strings.Split(input, " ")
+        if err := rootCmd.ExecuteContext(rootCmd.Context(), args...); err != nil {
+            fmt.Printf("Error: %v\n", err)
+        }
     }
 }
