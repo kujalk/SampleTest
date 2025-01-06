@@ -147,23 +147,16 @@ func formatStatsResults(results []map[string]interface{}) {
 }
 
 func executeSearch(conn splunk.Connection, baseQuery string, params SearchParams) ([]map[string]interface{}, error) {
-    var filterConditions []string
+    // Replace the wildcard placeholders with actual values
+    finalQuery := strings.ReplaceAll(baseQuery, "testtype=*", fmt.Sprintf("testtype=%s", params.authType))
+    finalQuery = strings.ReplaceAll(finalQuery, "testtarget=*", fmt.Sprintf("testtarget=%s", params.target))
     
-    if params.authType != "all" {
-        filterConditions = append(filterConditions, fmt.Sprintf("type=%q", params.authType))
+    // If the value is "all", replace it back with wildcard
+    if params.authType == "all" {
+        finalQuery = strings.ReplaceAll(finalQuery, "testtype=all", "testtype=*")
     }
-    
-    if params.target != "all" {
-        filterConditions = append(filterConditions, fmt.Sprintf("user=%q", params.target))
-    }
-    
-    finalQuery := baseQuery
-    if len(filterConditions) > 0 {
-        if !strings.Contains(baseQuery, "where") {
-            finalQuery += " where " + strings.Join(filterConditions, " AND ")
-        } else {
-            finalQuery += " AND " + strings.Join(filterConditions, " AND ")
-        }
+    if params.target == "all" {
+        finalQuery = strings.ReplaceAll(finalQuery, "testtarget=all", "testtarget=*")
     }
     
     searchOptions := splunk.SearchOptions{
