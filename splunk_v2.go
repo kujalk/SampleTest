@@ -14,6 +14,9 @@ import (
     "golang.org/x/term"
 )
 
+// Global variable for Splunk connection
+var globalSplunkConn splunk.Connection
+
 // formatResultsTable converts Splunk query results into a formatted table
 func formatResultsTable(results []map[string]interface{}) {
     if len(results) == 0 {
@@ -92,11 +95,9 @@ func createSearchCommand(name, description, searchQuery string) *cobra.Command {
         Use:   name,
         Short: description,
         Run: func(cmd *cobra.Command, args []string) {
-            // We'll set this in main()
-            splunkConn := cmd.Context().Value("splunkConn").(splunk.Connection)
-            
+            // Use the global connection instead of context
             fmt.Printf("Executing %s query...\n", name)
-            recs, err := executeSearch(splunkConn, searchQuery)
+            recs, err := executeSearch(globalSplunkConn, searchQuery)
             if err != nil {
                 fmt.Printf("Error executing query: %v\n", err)
                 return
@@ -123,8 +124,8 @@ func main() {
     fmt.Println()
     password := strings.TrimSpace(string(bytePassword))
 
-    // Initialize Splunk connection
-    splunkConn := splunk.Connection{
+    // Initialize global Splunk connection
+    globalSplunkConn = splunk.Connection{
         Host:     "https://splunk-server:8089",
         AuthType: "basic",
         Username: username,
@@ -132,7 +133,7 @@ func main() {
     }
 
     // Test connection
-    _, err := executeSearch(splunkConn, "search index=_internal | head 1")
+    _, err := executeSearch(globalSplunkConn, "search index=_internal | head 1")
     if err != nil {
         fmt.Printf("Failed to connect to Splunk: %v\n", err)
         os.Exit(1)
