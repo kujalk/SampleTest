@@ -162,10 +162,10 @@ func executeSearch(conn splunk.Connection, baseQuery string, params SearchParams
     searchOptions := splunk.SearchOptions{
         MaxCount:        100,
         UseEarliestTime: true,
-        EarliestTime:    time.Now().Add(-30 * 24 * time.Hour),
+        EarliestTime:    time.Now().Add(-60 * time.Minute), // Changed to 60 minutes
         UseLatestTime:   true,
         LatestTime:      time.Now(),
-    }
+}
 
     return conn.Search(finalQuery, searchOptions)
 }
