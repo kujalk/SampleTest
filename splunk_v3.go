@@ -83,13 +83,17 @@ func formatStatsResults(results []map[string]interface{}) {
     }
 
     // Extract pass/fail counts
-    var total float64
-    counts := make(map[string]float64)
+    var total int
+    counts := map[string]int{
+        "pass": 0,
+        "fail": 0,
+    }
     
+    // Process results in the format [map[count:1 result:fail] map[count:40 result:pass]]
     for _, result := range results {
-        status := result["status"].(string)
-        count := result["count"].(float64)
-        counts[status] = count
+        category := result["result"].(string)
+        count := int(result["count"].(float64)) // Convert float64 to int
+        counts[category] = count
         total += count
     }
 
@@ -97,29 +101,31 @@ func formatStatsResults(results []map[string]interface{}) {
     fmt.Println("\nPass/Fail Statistics:")
     fmt.Println("--------------------")
 
-    // ASCII pie chart (simplified representation)
+    // ASCII chart
     chartWidth := 50
     fmt.Println("\nDistribution Chart:")
     
-    statuses := []string{"pass", "fail"}
+    // Define colors
     colors := map[string]string{
         "pass": "\033[32m", // Green
         "fail": "\033[31m", // Red
     }
     reset := "\033[0m"
 
-    for _, status := range statuses {
-        count := counts[status]
-        percentage := (count / total) * 100
+    // Display results in consistent order
+    categories := []string{"pass", "fail"}
+    
+    for _, category := range categories {
+        count := counts[category]
+        percentage := (float64(count) / float64(total)) * 100
         bars := int(math.Round((percentage / 100) * float64(chartWidth)))
         
         // Create the bar with color
         bar := strings.Repeat("█", bars)
         
-        // Print colored bar with percentage
-        fmt.Printf("%s%-6s %s%s%s %5.1f%% (%0.f)\n",
-            colors[status],
-            strings.Title(status),
+        fmt.Printf("%s%-6s %s%s%s %5.1f%% (%d)\n",
+            colors[category],
+            strings.Title(category),
             bar,
             reset,
             strings.Repeat(" ", chartWidth-bars),
@@ -135,17 +141,17 @@ func formatStatsResults(results []map[string]interface{}) {
     fmt.Fprintln(w, "Status\tCount\tPercentage")
     fmt.Fprintln(w, "------\t-----\t----------")
     
-    for _, status := range statuses {
-        count := counts[status]
-        percentage := (count / total) * 100
-        fmt.Fprintf(w, "%s\t%0.f\t%.1f%%\n",
-            strings.Title(status),
+    for _, category := range categories {
+        count := counts[category]
+        percentage := (float64(count) / float64(total)) * 100
+        fmt.Fprintf(w, "%s\t%d\t%.1f%%\n",
+            strings.Title(category),
             count,
             percentage)
     }
-    fmt.Fprintf(w, "Total\t%0.f\t100.0%%\n", total)
+    fmt.Fprintf(w, "Total\t%d\t100.0%%\n", total)
 }
-
+    
 func executeSearch(conn splunk.Connection, baseQuery string, params SearchParams) ([]map[string]interface{}, error) {
     // Replace the wildcard placeholders with actual values
     finalQuery := strings.ReplaceAll(baseQuery, "testtype=*", fmt.Sprintf("testtype=%s", params.authType))
