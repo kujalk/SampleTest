@@ -13,6 +13,8 @@ import (
 
     splunk "github.com/pvik/go-splunk-rest"
     "github.com/spf13/cobra"
+    "runtime"
+    "golang.org/x/sys/windows"
     "golang.org/x/term"
 )
 
@@ -83,6 +85,20 @@ func formatStatsResults(results []map[string]interface{}) {
         return
     }
 
+    // Initialize color variables
+    var enableColors bool
+    if runtime.GOOS == "windows" {
+        // Enable virtual terminal processing on Windows
+        stdout := windows.Handle(os.Stdout.Fd())
+        var originalMode uint32
+        windows.GetConsoleMode(stdout, &originalMode)
+        windows.SetConsoleMode(stdout, originalMode|windows.ENABLE_VIRTUAL_TERMINAL_PROCESSING)
+        enableColors = true
+    } else {
+        // For non-Windows systems, check if output is a terminal
+        enableColors = term.IsTerminal(int(os.Stdout.Fd()))
+    }
+
     // Extract pass/fail counts
     var total int
     counts := map[string]int{
@@ -90,30 +106,32 @@ func formatStatsResults(results []map[string]interface{}) {
         "fail": 0,
     }
     
-    // Process results with string count
     for _, result := range results {
         category := result["result"].(string)
-        // Convert string count to int
         count, _ := strconv.Atoi(result["count"].(string))
         counts[category] = count
         total += count
     }
 
-    // Calculate percentages and prepare visualization
     fmt.Println("\nPass/Fail Statistics:")
     fmt.Println("--------------------")
 
-    // ASCII chart
     chartWidth := 50
     fmt.Println("\nDistribution Chart:")
     
-    colors := map[string]string{
-        "pass": "\033[32m", // Green
-        "fail": "\033[31m", // Red
+    // Define color codes
+    var green, red, reset string
+    if enableColors {
+        green = "\x1b[32m"
+        red = "\x1b[31m"
+        reset = "\x1b[0m"
     }
-    reset := "\033[0m"
 
     categories := []string{"pass", "fail"}
+    colors := map[string]string{
+        "pass": green,
+        "fail": red,
+    }
     
     for _, category := range categories {
         count := counts[category]
@@ -122,17 +140,26 @@ func formatStatsResults(results []map[string]interface{}) {
         
         bar := strings.Repeat("█", bars)
         
-        fmt.Printf("%s%-6s %s%s%s %5.1f%% (%d)\n",
-            colors[category],
-            strings.Title(category),
-            bar,
-            reset,
-            strings.Repeat(" ", chartWidth-bars),
-            percentage,
-            count)
+        // Only apply colors if enabled
+        if enableColors {
+            fmt.Printf("%s%-6s %s%s%s %5.1f%% (%d)\n",
+                colors[category],
+                strings.Title(category),
+                bar,
+                reset,
+                strings.Repeat(" ", chartWidth-bars),
+                percentage,
+                count)
+        } else {
+            fmt.Printf("%-6s %s%s %5.1f%% (%d)\n",
+                strings.Title(category),
+                bar,
+                strings.Repeat(" ", chartWidth-bars),
+                percentage,
+                count)
+        }
     }
 
-    // Summary table
     fmt.Println("\nSummary Table:")
     w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
     defer w.Flush()
