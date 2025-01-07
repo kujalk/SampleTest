@@ -269,7 +269,7 @@ func main() {
     rootCmd.AddCommand(statsCmd)
 
     // Add help command
-    rootCmd.AddCommand(&cobra.Command{
+    helpCmd := &cobra.Command{
         Use:   "help",
         Short: "Display help information",
         Run: func(cmd *cobra.Command, args []string) {
@@ -284,7 +284,8 @@ func main() {
             fmt.Println("  --type string    Authentication type (ldap/ntlm/dns/all) (default \"all\")")
             fmt.Println("  --target string  Target user/group (default \"all\")")
         },
-    })
+    }
+    rootCmd.AddCommand(helpCmd)
 
     fmt.Println("\nType 'help' for available commands or 'exit' to quit")
     for {
@@ -301,10 +302,56 @@ func main() {
             continue
         }
 
-        args := strings.Split(input, " ")
+        // Split the input properly handling quoted arguments
+        args := parseCommandLine(input)
+        
+        // Reset root command for each iteration
+        rootCmd.ResetFlags()
+        rootCmd.ResetCommands()
+        
+        // Re-add all commands
+        for name, query := range searches {
+            cmd := createSearchCommand(name, fmt.Sprintf("Query %s data", strings.TrimPrefix(name, "query-")), query, false)
+            rootCmd.AddCommand(cmd)
+        }
+        rootCmd.AddCommand(statsCmd)
+        rootCmd.AddCommand(helpCmd)
+
+        // Execute the command with arguments
         rootCmd.SetArgs(args)
         if err := rootCmd.Execute(); err != nil {
             fmt.Printf("Error: %v\n", err)
         }
     }
+}
+
+// Add this new function to properly parse command line arguments
+func parseCommandLine(input string) []string {
+    var args []string
+    var currentArg strings.Builder
+    inQuotes := false
+    
+    for _, char := range input {
+        switch char {
+        case '"':
+            inQuotes = !inQuotes
+        case ' ':
+            if !inQuotes {
+                if currentArg.Len() > 0 {
+                    args = append(args, currentArg.String())
+                    currentArg.Reset()
+                }
+            } else {
+                currentArg.WriteRune(char)
+            }
+        default:
+            currentArg.WriteRune(char)
+        }
+    }
+    
+    if currentArg.Len() > 0 {
+        args = append(args, currentArg.String())
+    }
+    
+    return args
 }
