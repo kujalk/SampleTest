@@ -9,6 +9,7 @@ import (
     "strings"
     "text/tabwriter"
     "time"
+    "strconv"
 
     splunk "github.com/pvik/go-splunk-rest"
     "github.com/spf13/cobra"
@@ -89,10 +90,11 @@ func formatStatsResults(results []map[string]interface{}) {
         "fail": 0,
     }
     
-    // Process results in the format [map[count:1 result:fail] map[count:40 result:pass]]
+    // Process results with string count
     for _, result := range results {
         category := result["result"].(string)
-        count := int(result["count"].(float64)) // Convert float64 to int
+        // Convert string count to int
+        count, _ := strconv.Atoi(result["count"].(string))
         counts[category] = count
         total += count
     }
@@ -105,14 +107,12 @@ func formatStatsResults(results []map[string]interface{}) {
     chartWidth := 50
     fmt.Println("\nDistribution Chart:")
     
-    // Define colors
     colors := map[string]string{
         "pass": "\033[32m", // Green
         "fail": "\033[31m", // Red
     }
     reset := "\033[0m"
 
-    // Display results in consistent order
     categories := []string{"pass", "fail"}
     
     for _, category := range categories {
@@ -120,7 +120,6 @@ func formatStatsResults(results []map[string]interface{}) {
         percentage := (float64(count) / float64(total)) * 100
         bars := int(math.Round((percentage / 100) * float64(chartWidth)))
         
-        // Create the bar with color
         bar := strings.Repeat("█", bars)
         
         fmt.Printf("%s%-6s %s%s%s %5.1f%% (%d)\n",
