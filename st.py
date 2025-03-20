@@ -211,13 +211,6 @@ def simulate_real_time_anomaly_detection():
         st.error(f"Error reading CSV file: {e}")
         return
     
-    # Start button
-    start_button = st.button("Start Simulation")
-    
-    if not start_button:
-        st.info("Press 'Start Simulation' to begin")
-        return
-    
     # Simulation loop
     try:
         for chunk_idx, chunk_start in enumerate(range(0, len(df), chunk_size)):
@@ -310,47 +303,60 @@ def simulate_real_time_anomaly_detection():
             alert_color = "red" if alert_generated else "green"
             alert_status.markdown(f"<div style='background-color:{alert_color};padding:10px;border-radius:5px;color:white;text-align:center;'><strong>{alert_text}</strong></div>", unsafe_allow_html=True)
             
+            # Convert deques to lists for plotting
+            time_points_list = list(time_points)
+            real_values_list = list(all_real_values)
+            predicted_values_list = list(all_predicted_values)
+            all_anomalies_list = list(all_anomalies)
+            thresholds_list = list(thresholds)
+            errors_list = list(errors)
+            
             # Plot the time series
             fig1, ax1 = plt.subplots(figsize=(10, 5))
-            ax1.plot(time_points, all_real_values, label='Real Value', color='blue')
-            ax1.plot(time_points, all_predicted_values, label='Predicted', color='green')
             
-            # Plot anomalies
-            anomaly_indices = [i for i, anomaly in enumerate(all_anomalies) if anomaly]
-            if anomaly_indices:
-                anomaly_times = [time_points[i] for i in anomaly_indices]
-                anomaly_values = [all_real_values[i] for i in anomaly_indices]
-                ax1.scatter(anomaly_times, anomaly_values, color='red', label='Anomaly', zorder=5)
-            
-            ax1.set_title('Transaction Time: Real vs Predicted')
-            ax1.set_xlabel('Time Step')
-            ax1.set_ylabel('Transaction Time')
-            ax1.legend()
-            ax1.grid(True, alpha=0.3)
-            
-            # Display the time series plot
-            timeseries_chart.pyplot(fig1)
-            plt.close(fig1)
-            
-            # Plot the threshold evolution
-            fig2, ax2 = plt.subplots(figsize=(10, 5))
-            ax2.plot(time_points, thresholds, label='Threshold', color='purple')
-            ax2.plot(time_points, errors, label='Error', color='orange', alpha=0.5)
-            
-            # Highlight where errors exceed threshold
-            for i, (err, thresh) in enumerate(zip(errors, thresholds)):
-                if err > thresh:
-                    ax2.axvspan(time_points[i]-0.5, time_points[i]+0.5, color='red', alpha=0.2)
-            
-            ax2.set_title('Threshold Evolution and Errors')
-            ax2.set_xlabel('Time Step')
-            ax2.set_ylabel('Value')
-            ax2.legend()
-            ax2.grid(True, alpha=0.3)
-            
-            # Display the threshold plot
-            threshold_chart.pyplot(fig2)
-            plt.close(fig2)
+            # Ensure we have data to plot
+            if time_points_list and real_values_list and predicted_values_list:
+                ax1.plot(time_points_list, real_values_list, label='Real Value', color='blue')
+                ax1.plot(time_points_list, predicted_values_list, label='Predicted', color='green')
+                
+                # Plot anomalies
+                anomaly_indices = [i for i, anomaly in enumerate(all_anomalies_list) if anomaly]
+                if anomaly_indices:
+                    anomaly_times = [time_points_list[i] for i in anomaly_indices]
+                    anomaly_values = [real_values_list[i] for i in anomaly_indices]
+                    ax1.scatter(anomaly_times, anomaly_values, color='red', label='Anomaly', zorder=5)
+                
+                ax1.set_title('Transaction Time: Real vs Predicted')
+                ax1.set_xlabel('Time Step')
+                ax1.set_ylabel('Transaction Time')
+                ax1.legend()
+                ax1.grid(True, alpha=0.3)
+                
+                # Display the time series plot
+                timeseries_chart.pyplot(fig1)
+                plt.close(fig1)
+                
+                # Plot the threshold evolution
+                fig2, ax2 = plt.subplots(figsize=(10, 5))
+                ax2.plot(time_points_list, thresholds_list, label='Threshold', color='purple')
+                ax2.plot(time_points_list, errors_list, label='Error', color='orange', alpha=0.5)
+                
+                # Highlight where errors exceed threshold
+                for i, (err, thresh) in enumerate(zip(errors_list, thresholds_list)):
+                    if err > thresh:
+                        ax2.axvspan(time_points_list[i]-0.5, time_points_list[i]+0.5, color='red', alpha=0.2)
+                
+                ax2.set_title('Threshold Evolution and Errors')
+                ax2.set_xlabel('Time Step')
+                ax2.set_ylabel('Value')
+                ax2.legend()
+                ax2.grid(True, alpha=0.3)
+                
+                # Display the threshold plot
+                threshold_chart.pyplot(fig2)
+                plt.close(fig2)
+            else:
+                st.warning("Not enough data points to plot yet.")
             
             # Pause to simulate real-time processing
             time.sleep(update_interval)
@@ -372,8 +378,15 @@ def simulate_real_time_anomaly_detection():
 
 # Main function
 def main():
-    # Add a run button
-    if st.sidebar.button("Run Simulation"):
+    # Create placeholders for the simulation
+    if 'simulation_started' not in st.session_state:
+        st.session_state.simulation_started = False
+    
+    # Start button
+    start_button = st.button("Start Simulation")
+    
+    if start_button or st.session_state.simulation_started:
+        st.session_state.simulation_started = True
         simulate_real_time_anomaly_detection()
 
 if __name__ == "__main__":
