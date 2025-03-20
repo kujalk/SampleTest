@@ -9,6 +9,22 @@ import time
 import os
 from collections import deque
 
+# Initialize session state variables if they don't exist
+if 'simulation_started' not in st.session_state:
+    st.session_state.simulation_started = False
+
+if 'params_set' not in st.session_state:
+    st.session_state.params_set = False
+    st.session_state.window_size = 30
+    st.session_state.future_window = 5
+    st.session_state.chunk_size = 100
+    st.session_state.update_interval = 0.5
+    st.session_state.initial_threshold = 0.0
+    st.session_state.alpha_raise = 0.5
+    st.session_state.alpha_fall = 0.05
+    st.session_state.anomaly_window = 5
+    st.session_state.min_anomalies = 3
+
 # Set page config
 st.set_page_config(
     page_title="Anomaly Detection Dashboard",
@@ -23,6 +39,19 @@ This dashboard simulates real-time anomaly detection in time series data using a
 Adjust the parameters using the sliders on the sidebar to fine-tune the anomaly detection sensitivity.
 """)
 
+# Function to set parameters
+def set_params():
+    st.session_state.window_size = window_size
+    st.session_state.future_window = future_window
+    st.session_state.chunk_size = chunk_size
+    st.session_state.update_interval = update_interval
+    st.session_state.initial_threshold = initial_threshold
+    st.session_state.alpha_raise = alpha_raise
+    st.session_state.alpha_fall = alpha_fall
+    st.session_state.anomaly_window = anomaly_window
+    st.session_state.min_anomalies = min_anomalies
+    st.session_state.params_set = True
+
 # Sidebar for parameters
 st.sidebar.header("Parameters")
 
@@ -35,19 +64,36 @@ uploaded_model = st.sidebar.file_uploader("Upload Keras model file", type=["h5",
 # File uploader for label encoders
 uploaded_encoders = st.sidebar.file_uploader("Upload label encoders pickle file", type=["pkl"])
 
-# Simulation parameters
-window_size = st.sidebar.slider("Input Window Size", min_value=5, max_value=100, value=30)
-future_window = st.sidebar.slider("Prediction Window Size", min_value=1, max_value=20, value=5)
-chunk_size = st.sidebar.slider("Chunk Size", min_value=10, max_value=500, value=100)
-update_interval = st.sidebar.slider("Update Interval (seconds)", min_value=0.1, max_value=5.0, value=0.5, step=0.1)
+# Only show parameter setup if simulation hasn't started
+if not st.session_state.simulation_started:
+    # Simulation parameters
+    window_size = st.sidebar.slider("Input Window Size", min_value=5, max_value=100, value=st.session_state.window_size)
+    future_window = st.sidebar.slider("Prediction Window Size", min_value=1, max_value=20, value=st.session_state.future_window)
+    chunk_size = st.sidebar.slider("Chunk Size", min_value=10, max_value=500, value=st.session_state.chunk_size)
+    update_interval = st.sidebar.slider("Update Interval (seconds)", min_value=0.1, max_value=5.0, value=st.session_state.update_interval, step=0.1)
 
-# Anomaly detection parameters
-st.sidebar.header("Anomaly Detection Parameters")
-initial_threshold = st.sidebar.slider("Initial Threshold", min_value=0.0, max_value=1.0, value=0.0, step=0.01)
-alpha_raise = st.sidebar.slider("Alpha Raise (↑ for more sensitivity)", min_value=0.0, max_value=1.0, value=0.5, step=0.01)
-alpha_fall = st.sidebar.slider("Alpha Fall (↓ for more sensitivity)", min_value=0.0, max_value=0.5, value=0.05, step=0.01)
-anomaly_window = st.sidebar.slider("Anomaly Window Size", min_value=3, max_value=10, value=5)
-min_anomalies = st.sidebar.slider("Min Anomalies for Alert", min_value=1, max_value=5, value=3)
+    # Anomaly detection parameters
+    st.sidebar.header("Anomaly Detection Parameters")
+    initial_threshold = st.sidebar.slider("Initial Threshold", min_value=0.0, max_value=1.0, value=st.session_state.initial_threshold, step=0.01)
+    alpha_raise = st.sidebar.slider("Alpha Raise (↑ for more sensitivity)", min_value=0.0, max_value=1.0, value=st.session_state.alpha_raise, step=0.01)
+    alpha_fall = st.sidebar.slider("Alpha Fall (↓ for more sensitivity)", min_value=0.0, max_value=0.5, value=st.session_state.alpha_fall, step=0.01)
+    anomaly_window = st.sidebar.slider("Anomaly Window Size", min_value=3, max_value=10, value=st.session_state.anomaly_window)
+    min_anomalies = st.sidebar.slider("Min Anomalies for Alert", min_value=1, max_value=5, value=st.session_state.min_anomalies)
+    
+    # Button to set parameters
+    st.sidebar.button("Apply Parameters", on_click=set_params)
+else:
+    # Display the current parameters but don't allow changing
+    st.sidebar.subheader("Current Parameters (Simulation Running)")
+    st.sidebar.text(f"Input Window Size: {st.session_state.window_size}")
+    st.sidebar.text(f"Prediction Window Size: {st.session_state.future_window}")
+    st.sidebar.text(f"Chunk Size: {st.session_state.chunk_size}")
+    st.sidebar.text(f"Update Interval: {st.session_state.update_interval} seconds")
+    st.sidebar.text(f"Initial Threshold: {st.session_state.initial_threshold}")
+    st.sidebar.text(f"Alpha Raise: {st.session_state.alpha_raise}")
+    st.sidebar.text(f"Alpha Fall: {st.session_state.alpha_fall}")
+    st.sidebar.text(f"Anomaly Window Size: {st.session_state.anomaly_window}")
+    st.sidebar.text(f"Min Anomalies for Alert: {st.session_state.min_anomalies}")
 
 # Info about alpha parameters
 st.sidebar.markdown("""
@@ -56,6 +102,18 @@ st.sidebar.markdown("""
 - **Moderate**: Medium Alpha Raise (0.4-0.6), Medium Alpha Fall (0.05-0.1)
 - **More Sensitive**: Higher Alpha Raise (0.7-1.0), Lower Alpha Fall (0.01-0.04)
 """)
+
+# Function to reset simulation
+def reset_simulation():
+    st.session_state.simulation_started = False
+    # Clean up temporary files
+    for temp_file in ["temp_data.csv", "temp_model.keras", "temp_encoders.pkl"]:
+        if os.path.exists(temp_file):
+            os.remove(temp_file)
+
+# Add reset button if simulation is running
+if st.session_state.simulation_started:
+    st.sidebar.button("Reset Simulation", on_click=reset_simulation)
 
 # Function to preprocess data
 def preprocess_data(df, label_encoders):
@@ -120,6 +178,10 @@ def create_sequences(data, sequence_length=30, future_window=5):
         X.append(data.iloc[i:(i + sequence_length)].values)
     return np.array(X)
 
+# Start the simulation
+def start_simulation():
+    st.session_state.simulation_started = True
+
 # Main simulation function
 def simulate_real_time_anomaly_detection():
     # Check if files are uploaded
@@ -137,6 +199,7 @@ def simulate_real_time_anomaly_detection():
         st.success("Model loaded successfully!")
     except Exception as e:
         st.error(f"Error loading model: {e}")
+        reset_simulation()
         return
     
     # Load the label encoders
@@ -151,6 +214,7 @@ def simulate_real_time_anomaly_detection():
         st.success("Label encoders loaded successfully!")
     except Exception as e:
         st.error(f"Error loading label encoders: {e}")
+        reset_simulation()
         return
     
     # Save the uploaded file to a temporary CSV
@@ -183,8 +247,16 @@ def simulate_real_time_anomaly_detection():
     # Create progress bar
     progress_bar = st.progress(0)
     
-    # Set up parameters
-    threshold = initial_threshold
+    # Set up parameters from session state
+    window_size = st.session_state.window_size
+    future_window = st.session_state.future_window
+    chunk_size = st.session_state.chunk_size
+    update_interval = st.session_state.update_interval
+    threshold = st.session_state.initial_threshold
+    alpha_raise = st.session_state.alpha_raise
+    alpha_fall = st.session_state.alpha_fall
+    anomaly_window = st.session_state.anomaly_window
+    min_anomalies = st.session_state.min_anomalies
     
     # Initialize data container
     accumulated_data = pd.DataFrame()
@@ -209,6 +281,7 @@ def simulate_real_time_anomaly_detection():
         total_chunks = (len(df) // chunk_size) + 1
     except Exception as e:
         st.error(f"Error reading CSV file: {e}")
+        reset_simulation()
         return
     
     # Simulation loop
@@ -231,6 +304,7 @@ def simulate_real_time_anomaly_detection():
             
             if new_data is None:
                 st.error("Error preprocessing data. Check if your CSV has the required columns.")
+                reset_simulation()
                 break
             
             # Accumulate data
@@ -364,29 +438,30 @@ def simulate_real_time_anomaly_detection():
         # Show completion
         progress_bar.progress(1.0)
         st.success("Simulation completed!")
+        reset_simulation()
         
     except Exception as e:
         st.error(f"Error during simulation: {e}")
         import traceback
         st.code(traceback.format_exc())
+        reset_simulation()
     
     finally:
-        # Clean up temporary files
-        for temp_file in ["temp_data.csv", "temp_model.keras", "temp_encoders.pkl"]:
-            if os.path.exists(temp_file):
-                os.remove(temp_file)
+        # Clean up temporary files is now handled by reset_simulation()
+        pass
 
 # Main function
 def main():
-    # Create placeholders for the simulation
-    if 'simulation_started' not in st.session_state:
-        st.session_state.simulation_started = False
+    # Only show the start button if simulation hasn't started yet
+    if not st.session_state.simulation_started:
+        start_button = st.button("Start Simulation", on_click=start_simulation)
+        
+        # Only allow starting if parameters are set
+        if not st.session_state.params_set:
+            st.info("Please set your parameters using the 'Apply Parameters' button in the sidebar before starting the simulation.")
     
-    # Start button
-    start_button = st.button("Start Simulation")
-    
-    if start_button or st.session_state.simulation_started:
-        st.session_state.simulation_started = True
+    # Run the simulation if it's already started
+    if st.session_state.simulation_started:
         simulate_real_time_anomaly_detection()
 
 if __name__ == "__main__":
