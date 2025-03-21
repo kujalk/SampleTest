@@ -395,7 +395,7 @@ def simulate_real_time_anomaly_detection():
             # Make predictions
             predictions = sim_state['model'].predict(sequences, verbose=0)
             
-            # Get actuals (matching the second file's approach)
+            # Get actuals and ensure we're using the first prediction value only
             actuals = []
             for i in range(len(sequences)):
                 start_idx = i + st.session_state.window_size
@@ -404,42 +404,49 @@ def simulate_real_time_anomaly_detection():
             
             actuals = np.array(actuals)
             
-            # Process batch of predictions at once
+            # Process predictions - FIXES THE BROADCASTING ISSUE
             if len(actuals) > 0 and len(predictions) > 0:
-                # Inverse transform predictions and actuals for display
-                predictions_original = current_scaler.inverse_transform(predictions.reshape(-1, 1)).flatten()
-                actuals_original = current_scaler.inverse_transform(actuals.reshape(-1, 1)).flatten()
+                # Extract first prediction for each sequence
+                first_predictions = predictions[:, 0]  # Take only first prediction value
                 
-                # Calculate errors and determine alerts
+                # Ensure actuals and predictions match in length
+                min_length = min(len(actuals), len(first_predictions))
+                actuals = actuals[:min_length]
+                predictions_to_use = first_predictions[:min_length]
+                
+                # Inverse transform for display
+                actuals_original = current_scaler.inverse_transform(actuals.reshape(-1, 1)).flatten()
+                predictions_original = current_scaler.inverse_transform(predictions_to_use.reshape(-1, 1)).flatten()
+                
+                # Calculate errors
                 errors = actuals_original - predictions_original
                 
                 # Add errors to history for percentile calculation
                 for err in errors:
                     sim_state['error_history'].append(err)
                 
-                # Calculate threshold using percentile of error history
-                if len(sim_state['error_history']) > 10:  # Need some minimum history
-                    threshold = np.percentile(sim_state['error_history'], st.session_state.percentile_threshold)
+                # Calculate threshold using percentile
+                if len(sim_state['error_history']) > 10:
+                    threshold = np.percentile(list(sim_state['error_history']), st.session_state.percentile_threshold)
                 else:
                     threshold = 0  # Default until we have enough history
                 
-                # Detect anomalies (error > threshold AND predicted < actual)
-                anomalies = (errors > threshold) & (predictions_original < actuals_original)
+                # Detect anomalies - error > threshold AND predicted < actual
+                anomalies = np.logical_and(errors > threshold, predictions_original < actuals_original)
                 
                 # Process each prediction
                 for i in range(len(predictions_original)):
-                    if i < len(actuals_original) and i < len(anomalies):
-                        # Update tracking collections
-                        sim_state['current_time'] += 1
-                        sim_state['all_real_values'].append(actuals_original[i])
-                        sim_state['all_predicted_values'].append(predictions_original[i])
-                        sim_state['all_anomalies'].append(anomalies[i])
-                        sim_state['thresholds'].append(threshold)
-                        sim_state['errors'].append(errors[i])
-                        sim_state['time_points'].append(sim_state['current_time'])
-                        
-                        # Track recent anomalies for alert detection
-                        sim_state['recent_anomalies'].append(anomalies[i])
+                    # Update tracking collections
+                    sim_state['current_time'] += 1
+                    sim_state['all_real_values'].append(actuals_original[i])
+                    sim_state['all_predicted_values'].append(predictions_original[i])
+                    sim_state['all_anomalies'].append(anomalies[i])
+                    sim_state['thresholds'].append(threshold)
+                    sim_state['errors'].append(errors[i])
+                    sim_state['time_points'].append(sim_state['current_time'])
+                    
+                    # Track recent anomalies for alert detection
+                    sim_state['recent_anomalies'].append(anomalies[i])
             
             # Check for alert condition
             alert_generated = sum(sim_state['recent_anomalies']) >= st.session_state.min_anomalies
@@ -449,7 +456,7 @@ def simulate_real_time_anomaly_detection():
             # Update anomaly status
             anomaly_count = sum(sim_state['all_anomalies'])
             anomaly_status.metric("Anomalies Detected", anomaly_count, 
-                               f"+{sum(list(sim_state['all_anomalies'])[-len(new_data):])}" if len(new_data) < len(sim_state['all_anomalies']) else None)
+                               f"+{sum(list(sim_state['all_anomalies'])[-len(new_data):]) if len(new_data) < len(sim_state['all_anomalies']) else 0}")
             
             # Update alert status with appropriate color
             alert_text = f"ALERT ACTIVE! ({sim_state['alert_count']} total)" if alert_generated else "No Active Alerts"
