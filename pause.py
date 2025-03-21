@@ -233,76 +233,138 @@ def create_sequences(data, sequence_length=30, future_window=5):
         X.append(data.iloc[i:(i + sequence_length)].values)
     return np.array(X)
 
+def get_default_files():
+    # Define default file paths for when user doesn't upload files
+    default_files = {
+        'data_path': "default_data.csv",
+        'model_path': "default_model.keras",
+        'encoders_path': "default_encoders.pkl"
+    }
+    
+    # Check if the default files exist
+    missing_files = []
+    for file_type, path in default_files.items():
+        if not os.path.exists(path):
+            missing_files.append(f"{file_type} ({path})")
+    
+    if missing_files:
+        st.warning(f"Default files not found: {', '.join(missing_files)}. Please upload files manually.")
+        return None, None, None
+    
+    return default_files['data_path'], default_files['model_path'], default_files['encoders_path']
+    
 # Function to initialize simulation
 def initialize_simulation():
     if uploaded_file is None or uploaded_model is None or uploaded_encoders is None:
-        st.warning("Please upload all required files (CSV data, model, and label encoders).")
-        return False
-    
-    # Load the model if not already loaded
-    if st.session_state.sim_state['model'] is None:
-        try:
-            # Save the uploaded model to a temporary file
-            with open("temp_model.keras", "wb") as f:
-                f.write(uploaded_model.getbuffer())
-            
-            st.session_state.sim_state['model'] = load_model("temp_model.keras")
-            st.success("Model loaded successfully!")
-        except Exception as e:
-            st.error(f"Error loading model: {e}")
-            reset_simulation()
-            return False
-    
-    # Load the label encoders if not already loaded
-    if st.session_state.sim_state['label_encoders'] is None:
-        try:
-            # Save the uploaded encoders to a temporary file
-            with open("temp_encoders.pkl", "wb") as f:
-                f.write(uploaded_encoders.getbuffer())
-            
-            with open("temp_encoders.pkl", "rb") as f:
-                st.session_state.sim_state['label_encoders'] = pickle.load(f)
-            
-            st.success("Label encoders loaded successfully!")
-        except Exception as e:
-            st.error(f"Error loading label encoders: {e}")
-            reset_simulation()
-            return False
-    
-    # Load the data if not already loaded
-    if st.session_state.sim_state['df'] is None:
-        # Save the uploaded file to a temporary CSV
-        with open("temp_data.csv", "wb") as f:
-            f.write(uploaded_file.getbuffer())
+        # Try to use default files
+        default_data_path, default_model_path, default_encoders_path = get_default_files()
         
-        try:
-            st.session_state.sim_state['df'] = pd.read_csv("temp_data.csv")
-            st.session_state.sim_state['total_chunks'] = (len(st.session_state.sim_state['df']) // st.session_state.chunk_size) + 1
-        except Exception as e:
-            st.error(f"Error reading CSV file: {e}")
-            reset_simulation()
+        if default_data_path is None:
+            st.warning("Please upload all required files (CSV data, model, and label encoders).")
             return False
-    
-    # Initialize accumulated data if not already initialized
-    if st.session_state.sim_state['accumulated_data'] is None:
-        st.session_state.sim_state['accumulated_data'] = pd.DataFrame()
         
-    # Initialize threshold
-    if st.session_state.sim_state['threshold'] == 0:
-        st.session_state.sim_state['threshold'] = st.session_state.initial_threshold
+        # Use default files
+        st.info("Using default files since uploads are missing.")
+        
+        # Load the model if not already loaded
+        if st.session_state.sim_state['model'] is None:
+            try:
+                st.session_state.sim_state['model'] = load_model(default_model_path)
+                st.success("Default model loaded successfully!")
+            except Exception as e:
+                st.error(f"Error loading default model: {e}")
+                reset_simulation()
+                return False
+        
+        # Load the label encoders if not already loaded
+        if st.session_state.sim_state['label_encoders'] is None:
+            try:
+                with open(default_encoders_path, "rb") as f:
+                    st.session_state.sim_state['label_encoders'] = pickle.load(f)
+                
+                st.success("Default label encoders loaded successfully!")
+            except Exception as e:
+                st.error(f"Error loading default label encoders: {e}")
+                reset_simulation()
+                return False
+        
+        # Load the data if not already loaded
+        if st.session_state.sim_state['df'] is None:
+            try:
+                st.session_state.sim_state['df'] = pd.read_csv(default_data_path)
+                st.session_state.sim_state['total_chunks'] = (len(st.session_state.sim_state['df']) // st.session_state.chunk_size) + 1
+            except Exception as e:
+                st.error(f"Error reading default CSV file: {e}")
+                reset_simulation()
+                return False
+    else:
+        # Original code for when files are uploaded
+        # ...
     
-    # Initialize data structures if needed
-    max_display_points = 250
-    if not st.session_state.sim_state['all_real_values']:
-        st.session_state.sim_state['all_real_values'] = deque(maxlen=max_display_points)
-        st.session_state.sim_state['all_predicted_values'] = deque(maxlen=max_display_points)
-        st.session_state.sim_state['all_anomalies'] = deque(maxlen=max_display_points)
-        st.session_state.sim_state['thresholds'] = deque(maxlen=max_display_points)
-        st.session_state.sim_state['errors'] = deque(maxlen=max_display_points)
-        st.session_state.sim_state['time_points'] = deque(maxlen=max_display_points)
-        st.session_state.sim_state['recent_anomalies'] = deque(maxlen=st.session_state.anomaly_window)
-    
-    return True
+        # Load the model if not already loaded
+        if st.session_state.sim_state['model'] is None:
+            try:
+                # Save the uploaded model to a temporary file
+                with open("temp_model.keras", "wb") as f:
+                    f.write(uploaded_model.getbuffer())
+                
+                st.session_state.sim_state['model'] = load_model("temp_model.keras")
+                st.success("Model loaded successfully!")
+            except Exception as e:
+                st.error(f"Error loading model: {e}")
+                reset_simulation()
+                return False
+        
+        # Load the label encoders if not already loaded
+        if st.session_state.sim_state['label_encoders'] is None:
+            try:
+                # Save the uploaded encoders to a temporary file
+                with open("temp_encoders.pkl", "wb") as f:
+                    f.write(uploaded_encoders.getbuffer())
+                
+                with open("temp_encoders.pkl", "rb") as f:
+                    st.session_state.sim_state['label_encoders'] = pickle.load(f)
+                
+                st.success("Label encoders loaded successfully!")
+            except Exception as e:
+                st.error(f"Error loading label encoders: {e}")
+                reset_simulation()
+                return False
+        
+        # Load the data if not already loaded
+        if st.session_state.sim_state['df'] is None:
+            # Save the uploaded file to a temporary CSV
+            with open("temp_data.csv", "wb") as f:
+                f.write(uploaded_file.getbuffer())
+            
+            try:
+                st.session_state.sim_state['df'] = pd.read_csv("temp_data.csv")
+                st.session_state.sim_state['total_chunks'] = (len(st.session_state.sim_state['df']) // st.session_state.chunk_size) + 1
+            except Exception as e:
+                st.error(f"Error reading CSV file: {e}")
+                reset_simulation()
+                return False
+        
+        # Initialize accumulated data if not already initialized
+        if st.session_state.sim_state['accumulated_data'] is None:
+            st.session_state.sim_state['accumulated_data'] = pd.DataFrame()
+            
+        # Initialize threshold
+        if st.session_state.sim_state['threshold'] == 0:
+            st.session_state.sim_state['threshold'] = st.session_state.initial_threshold
+        
+        # Initialize data structures if needed
+        max_display_points = 250
+        if not st.session_state.sim_state['all_real_values']:
+            st.session_state.sim_state['all_real_values'] = deque(maxlen=max_display_points)
+            st.session_state.sim_state['all_predicted_values'] = deque(maxlen=max_display_points)
+            st.session_state.sim_state['all_anomalies'] = deque(maxlen=max_display_points)
+            st.session_state.sim_state['thresholds'] = deque(maxlen=max_display_points)
+            st.session_state.sim_state['errors'] = deque(maxlen=max_display_points)
+            st.session_state.sim_state['time_points'] = deque(maxlen=max_display_points)
+            st.session_state.sim_state['recent_anomalies'] = deque(maxlen=st.session_state.anomaly_window)
+        
+        return True
 
 # Start the simulation
 def start_simulation():
