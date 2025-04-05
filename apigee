@@ -1,137 +1,162 @@
-Controlling Rate Limits in Apigee by Customer, Method, and Resource Path
-This article explains how to use Apigee to implement rate limiting for API consumers based on specific criteria: the customer, HTTP method (e.g., GET, POST, DELETE), and resource path (e.g., /v1/api1, /v2/group1). Apigee’s Quota and Spike Arrest policies, combined with custom attributes and conditions, provide the flexibility to achieve this granular control.
+Below is a Confluence-style article based on the response I provided. It’s structured with headings, bullet points, code blocks, and tables to align with Confluence’s typical formatting for technical documentation.
 
-Overview
+---
+
+# Controlling Rate Limits in Apigee by Customer, Method, and Resource Path
+
+This article explains how to use Apigee to implement rate limiting for API consumers based on specific criteria: the customer, HTTP method (e.g., GET, POST, DELETE), and resource path (e.g., `/v1/api1`, `/v2/group1`). Apigee’s Quota and Spike Arrest policies, combined with custom attributes and conditions, provide the flexibility to achieve this granular control.
+
+---
+
+## Overview
+
 Apigee allows you to enforce rate limits tailored to individual customers by leveraging API products, developer apps, and proxy policies. This guide covers:
 
-Using the Quota policy for per-customer limits.
-Applying Spike Arrest for traffic surge protection.
-Customizing limits with variables and conditions.
-Using the Quota Policy
+- Using the Quota policy for per-customer limits.
+- Applying Spike Arrest for traffic surge protection.
+- Customizing limits with variables and conditions.
+
+---
+
+## Using the Quota Policy
+
 The Quota policy enforces rate limits over a specified time period (e.g., requests per hour). It can be configured to differentiate by HTTP method and resource path, with limits tied to individual customers via API keys or developer apps.
 
-Implementation Steps
-Define API Products
+### Implementation Steps
 
-Create API products in Apigee for each combination of method and resource path (e.g., "GET /v1/api1", "POST /v2/group1").
-Set quota limits in the product configuration (e.g., 100 requests/hour for "GET /v1/api1").
-Assign Quotas to Customers
+1. **Define API Products**
+   - Create API products in Apigee for each combination of method and resource path (e.g., "GET /v1/api1", "POST /v2/group1").
+   - Set quota limits in the product configuration (e.g., 100 requests/hour for "GET /v1/api1").
 
-Link each customer’s developer app to the appropriate API product.
-Use the API key or client ID to enforce customer-specific quotas.
-Configure Proxy Policies
+2. **Assign Quotas to Customers**
+   - Link each customer’s developer app to the appropriate API product.
+   - Use the API key or client ID to enforce customer-specific quotas.
 
-Add Quota policies with conditions for method and path in your API proxy.
-xml
+3. **Configure Proxy Policies**
+   - Add Quota policies with conditions for method and path in your API proxy.
 
-Collapse
+   ```xml
+   <Quota name="Quota-Per-Method-And-Path" type="calendar">
+       <Interval>1</Interval>
+       <TimeUnit>hour</TimeUnit>
+       <Identifier ref="client_id"/>
+       <Allow count="100" countRef="verifyapikey.Verify-API-Key.apiproduct.developer.quota.limit"/>
+       <Condition>(request.verb = "GET" and request.uri.path = "/v1/api1")</Condition>
+   </Quota>
+   ```
 
-Wrap
+### Key Features
 
-Copy
-<Quota name="Quota-Per-Method-And-Path" type="calendar">
-    <Interval>1</Interval>
-    <TimeUnit>hour</TimeUnit>
-    <Identifier ref="client_id"/>
-    <Allow count="100" countRef="verifyapikey.Verify-API-Key.apiproduct.developer.quota.limit"/>
-    <Condition>(request.verb = "GET" and request.uri.path = "/v1/api1")</Condition>
-</Quota>
-Key Features
-Identifier: Ties the quota to a customer (e.g., client_id).
-Dynamic Limits: Use custom attributes to set variable count values.
-Using the Spike Arrest Policy
+- **Identifier:** Ties the quota to a customer (e.g., `client_id`).
+- **Dynamic Limits:** Use custom attributes to set variable `count` values.
+
+---
+
+## Using the Spike Arrest Policy
+
 The Spike Arrest policy protects against sudden traffic spikes and can be applied to specific methods and paths. It’s less suited for customer-specific limits unless paired with additional logic.
 
-Example Configuration
-xml
+### Example Configuration
 
-Collapse
-
-Wrap
-
-Copy
+```xml
 <SpikeArrest name="Spike-Arrest-Per-Method-And-Path">
     <Rate>10ps</Rate> <!-- 10 requests per second -->
     <Condition>(request.verb = "POST" and request.uri.path = "/v2/group1")</Condition>
 </SpikeArrest>
-Limitation
+```
+
+### Limitation
+
 Spike Arrest applies globally unless segmented with custom attributes or variables.
 
-Custom Logic with Variables and Conditions
-For maximum flexibility, use flow variables (e.g., request.verb, request.uri.path) and custom attributes on developer apps to dynamically enforce limits.
+---
 
-Steps
-Set Custom Attributes
+## Custom Logic with Variables and Conditions
 
-Define attributes on developer apps (e.g., rate_limit_get_v1_api1=100, rate_limit_post_v2_group1=50).
-Extract in Proxy
+For maximum flexibility, use flow variables (e.g., `request.verb`, `request.uri.path`) and custom attributes on developer apps to dynamically enforce limits.
 
-Use VerifyAPIKey or OAuthV2 policies to populate attributes into flow variables.
-Apply Conditional Quotas
+### Steps
 
-Reference custom attributes in the Quota policy:
-xml
+1. **Set Custom Attributes**
+   - Define attributes on developer apps (e.g., `rate_limit_get_v1_api1=100`, `rate_limit_post_v2_group1=50`).
 
-Collapse
+2. **Extract in Proxy**
+   - Use `VerifyAPIKey` or `OAuthV2` policies to populate attributes into flow variables.
 
-Wrap
+3. **Apply Conditional Quotas**
+   - Reference custom attributes in the Quota policy:
 
-Copy
-<Quota name="Customer-Specific-Quota">
-    <Interval>1</Interval>
-    <TimeUnit>minute</TimeUnit>
-    <Identifier ref="client_id"/>
-    <Allow countRef="developer.app.rate_limit_get_v1_api1"/>
-    <Condition>(request.verb = "GET" and request.uri.path = "/v1/api1")</Condition>
-</Quota>
-Practical Example
+   ```xml
+   <Quota name="Customer-Specific-Quota">
+       <Interval>1</Interval>
+       <TimeUnit>minute</TimeUnit>
+       <Identifier ref="client_id"/>
+       <Allow countRef="developer.app.rate_limit_get_v1_api1"/>
+       <Condition>(request.verb = "GET" and request.uri.path = "/v1/api1")</Condition>
+   </Quota>
+   ```
+
+---
+
+## Practical Example
+
 Consider two customers with different rate limits:
 
-Customer	GET /v1/api1	POST /v2/group1	DELETE /v2/group1
-Customer A	100/hour	50/hour	N/A
-Customer B	200/hour	N/A	20/hour
-Setup
-API Products
+| Customer   | GET /v1/api1 | POST /v2/group1 | DELETE /v2/group1 |
+|------------|--------------|-----------------|-------------------|
+| Customer A | 100/hour     | 50/hour         | N/A               |
+| Customer B | 200/hour     | N/A             | 20/hour           |
 
-Product 1: /v1/api1 (GET), with attribute quota_get_v1_api1.
-Product 2: /v2/group1 (POST, DELETE), with attributes quota_post_v2_group1 and quota_delete_v2_group1.
-Developer Apps
+### Setup
 
-Customer A: quota_get_v1_api1=100, quota_post_v2_group1=50.
-Customer B: quota_get_v1_api1=200, quota_delete_v2_group1=20.
-Proxy Configuration
+1. **API Products**
+   - Product 1: `/v1/api1` (GET), with attribute `quota_get_v1_api1`.
+   - Product 2: `/v2/group1` (POST, DELETE), with attributes `quota_post_v2_group1` and `quota_delete_v2_group1`.
 
-xml
+2. **Developer Apps**
+   - Customer A: `quota_get_v1_api1=100`, `quota_post_v2_group1=50`.
+   - Customer B: `quota_get_v1_api1=200`, `quota_delete_v2_group1=20`.
 
-Collapse
+3. **Proxy Configuration**
 
-Wrap
+   ```xml
+   <Quota name="Dynamic-Quota">
+       <Interval>1</Interval>
+       <TimeUnit>hour</TimeUnit>
+       <Identifier ref="client_id"/>
+       <Allow countRef="developer.app.quota_get_v1_api1"/>
+       <Condition>(request.verb = "GET" and request.uri.path = "/v1/api1")</Condition>
+   </Quota>
+   <Quota name="Dynamic-Quota-Post">
+       <Interval>1</Interval>
+       <TimeUnit>hour</TimeUnit>
+       <Identifier ref="client_id"/>
+       <Allow countRef="developer.app.quota_post_v2_group1"/>
+       <Condition>(request.verb = "POST" and request.uri.path = "/v2/group1")</Condition>
+   </Quota>
+   <Quota name="Dynamic-Quota-Delete">
+       <Interval>1</Interval>
+       <TimeUnit>hour</TimeUnit>
+       <Identifier ref="client_id"/>
+       <Allow countRef="developer.app.quota_delete_v2_group1"/>
+       <Condition>(request.verb = "DELETE" and request.uri.path = "/v2/group1")</Condition>
+   </Quota>
+   ```
 
-Copy
-<Quota name="Dynamic-Quota">
-    <Interval>1</Interval>
-    <TimeUnit>hour</TimeUnit>
-    <Identifier ref="client_id"/>
-    <Allow countRef="developer.app.quota_get_v1_api1"/>
-    <Condition>(request.verb = "GET" and request.uri.path = "/v1/api1")</Condition>
-</Quota>
-<Quota name="Dynamic-Quota-Post">
-    <Interval>1</Interval>
-    <TimeUnit>hour</TimeUnit>
-    <Identifier ref="client_id"/>
-    <Allow countRef="developer.app.quota_post_v2_group1"/>
-    <Condition>(request.verb = "POST" and request.uri.path = "/v2/group1")</Condition>
-</Quota>
-<Quota name="Dynamic-Quota-Delete">
-    <Interval>1</Interval>
-    <TimeUnit>hour</TimeUnit>
-    <Identifier ref="client_id"/>
-    <Allow countRef="developer.app.quota_delete_v2_group1"/>
-    <Condition>(request.verb = "DELETE" and request.uri.path = "/v2/group1")</Condition>
-</Quota>
-Additional Considerations
-Scalability: Quota policies are distributed across Apigee’s infrastructure for accurate counting.
-Monitoring: Use Apigee Analytics to track usage per customer, method, and path.
-Flexibility: Combine Quota and Spike Arrest for comprehensive rate limiting.
-Conclusion
+---
+
+## Additional Considerations
+
+- **Scalability:** Quota policies are distributed across Apigee’s infrastructure for accurate counting.
+- **Monitoring:** Use Apigee Analytics to track usage per customer, method, and path.
+- **Flexibility:** Combine Quota and Spike Arrest for comprehensive rate limiting.
+
+---
+
+## Conclusion
+
 Apigee’s Quota policy, combined with API products and custom attributes, enables precise rate limiting by customer, HTTP method, and resource path. This approach ensures both flexibility and scalability for managing API traffic.
+
+--- 
+
+This format should fit well into a Confluence page, with clear sections, examples, and a table for visual clarity. Let me know if you’d like any adjustments!
