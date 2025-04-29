@@ -1,0 +1,180 @@
+-- Global variable to store the parsed map file contents
+-- This ensures we only read the file once
+local rate_limits = {}
+local map_file_loaded = false
+local map_file_path = "/app/haproxy/file.map"
+
+-- Function to load and parse the map file
+local function load_map_file()
+    if map_file_loaded then
+        return
+    end
+    
+    local f = io.open(map_file_path, "r")
+    if not f then
+        core.Warning("Could not open map file: " .. map_file_path)
+        return
+    end
+    
+    -- Parse each line of the map file
+    for line in f:lines() do
+        local seal_id, get_limit, post_limit, patch_limit, delete_limit = line:match("(%S+)%s+(%d+)%s+(%d+)%s+(%d+)%s+(%d+)")
+        if seal_id then
+            rate_limits[seal_id] = {
+                get = tonumber(get_limit),
+                post = tonumber(post_limit),
+                patch = tonumber(patch_limit),
+                delete = tonumber(delete_limit)
+            }
+        end
+    end
+    
+    f:close()
+    map_file_loaded = true
+    core.Info("Map file loaded successfully with " .. #rate_limits .. " entries")
+end
+
+-- Function to get the rate limit for a specific seal_id and method
+function get_rate_limit(txn)
+    -- Load the map file if not already loaded
+    if not map_file_loaded then
+        load_map_file()
+    end
+    
+    -- Get the seal_id from the transaction
+    local seal_id = txn.get_var(txn, "txn.seal_id")
+    if not seal_id then
+        return nil
+    end
+    
+    -- Get the HTTP method
+    local method = txn.get_var(txn, "txn.method")
+    if not method then
+        method = txn.get_var(txn, "method")
+    end
+    
+    if not method then
+        return nil
+    end
+    
+    -- Convert method to lowercase for easier comparison
+    method = string.lower(method)
+    
+    -- Check if we have limits for this seal_id
+    local limits = rate_limits[seal_id]
+    if not limits then
+        -- Return default limits
+        if method == "get" then return 10
+        elseif method == "post" then return 10
+        elseif method == "patch" then return 10
+        elseif method == "delete" then return 5
+        else return 10 end
+    end
+    
+    -- Return the appropriate limit based on the method
+    if method == "get" then return limits.get
+    elseif method == "post" then return limits.post
+    elseif method == "patch" then return limits.patch
+    elseif method == "delete" then return limits.delete
+    else return 10 end
+end
+
+-- Function to extract client_id from JWT token
+function extract_client_id(txn)
+    -- Get the Authorization header
+    local auth_header = txn.get_var(txn, "req.hdr.Authorization")
+    if not auth_header then
+        return nil
+    end
+    
+    -- Check if it's a Bearer token
+    local token = auth_header:match("Bearer%s+(.+)")
+    if not token then
+        return nil
+    end
+    
+    -- Extract the payload section from the JWT token
+    local _, payload_b64, _ = token:match("([^.]+).([^.]+).([^.]+)")
+    if not payload_b64 then
+        return nil
+    end
+    
+    -- Add padding if needed
+    local padding = (4 - ((#payload_b64) % 4)) % 4
+    payload_b64 = payload_b64 .. string.rep("=", padding)
+    
+    -- Replace URL-safe characters
+    payload_b64 = payload_b64:gsub("-", "+"):gsub("_", "/")
+    
+    -- Decode the base64 string
+    local payload = core.decode_base64(payload_b64)
+    if not payload then
+        return nil
+    end
+    
+    -- Extract client_id from JSON
+    local client_id = payload:match('"client_id"%s*:%s*"([^"]+)"')
+    if not client_id then
+        return nil
+    end
+    
+    -- Extract seal_id from client_id (if in the format with a dash)
+    local seal_id = client_id:match(".-%-(.+)")
+    return seal_id or client_id
+end
+
+-- Function to create a tracking key combining seal_id and method
+function generate_tracking_key(txn)
+    local seal_id = txn.get_var(txn, "txn.seal_id")
+    local method = txn.get_var(txn, "txn.method") or txn.get_var(txn, "method")
+    
+    if seal_id and method then
+        return seal_id .. "-" .. method
+    end
+    return nil
+end
+
+-- Main action function to setup seal_id, tracking key, and rate limits
+function action(txn)
+    -- Extract seal_id from JWT if not already set
+    if not txn.get_var(txn, "txn.seal_id") then
+        local seal_id = extract_client_id(txn)
+        if seal_id then
+            txn.set_var(txn, "txn.seal_id", seal_id)
+        end
+    end
+    
+    -- Set HTTP method to transaction variable for easier access
+    txn.set_var(txn, "txn.method", txn.get_var(txn, "method"))
+    
+    -- Generate tracking key
+    local tracking_key = generate_tracking_key(txn)
+    if tracking_key then
+        txn.set_var(txn, "txn.tracking_key", tracking_key)
+    end
+    
+    -- Get appropriate rate limit
+    local rate_limit = get_rate_limit(txn)
+    if rate_limit then
+        txn.set_var(txn, "txn.rate_limit", rate_limit)
+    end
+    
+    return
+end
+
+-- Function to reload the map file (can be called from socat)
+function reload_map()
+    map_file_loaded = false
+    rate_limits = {}
+    load_map_file()
+    return "Map file reloaded"
+end
+
+-- Register the action when the script is loaded
+core.register_action("setup_rate_limiting", {"http-req"}, action)
+
+-- Register the reload function to allow map file reloading
+core.register_cli_handler("reload_rate_limits", "Reload rate limits map file", reload_map)
+
+-- Return the script to indicate successful loading
+return true
