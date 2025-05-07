@@ -1,0 +1,45 @@
+---
+- name: Manage HAProxy map file
+  hosts: localhost
+  vars:
+    map_file_path: "/path/to/your/haproxy.map"
+    seal: "10234"  # The seal to manage
+    new_values: "100 30 30 10"  # New values for add/update (get post patch delete rate limits)
+    state: "present"  # present/absent/query
+
+  tasks:
+    - name: Read current map file
+      ansible.builtin.slurp:
+        src: "{{ map_file_path }}"
+      register: map_file
+      changed_when: false
+
+    - name: Decode map file content
+      ansible.builtin.set_fact:
+        map_lines: "{{ (map_file.content | b64decode).split('\n') | select('match', '^\\s*\\d+') | list }}"
+      when: map_file.content is defined
+
+    - name: Check if seal exists
+      ansible.builtin.set_fact:
+        seal_exists: "{{ map_lines | select('match', '^' ~ seal ~ '\\s') | list | length > 0 }}"
+      when: map_lines is defined
+
+    - name: Get values by seal (query)
+      ansible.builtin.debug:
+        msg: "Values for seal {{ seal }}: {{ map_lines | select('match', '^' ~ seal ~ '\\s') | first | regex_replace('^' ~ seal ~ '\\s+(.*)$', '\\1') }}"
+      when: state == 'query' and seal_exists
+
+    - name: Delete line by seal
+      ansible.builtin.lineinfile:
+        path: "{{ map_file_path }}"
+        regexp: "^{{ seal }}\\s.*$"
+        state: absent
+      when: state == 'absent' and seal_exists
+
+    - name: Add or update line
+      ansible.builtin.lineinfile:
+        path: "{{ map_file_path }}"
+        regexp: "^{{ seal }}\\s.*$"
+        line: "{{ seal }} {{ new_values }}"
+        state: present
+      when: state == 'present'
